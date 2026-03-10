@@ -1,5 +1,5 @@
 {
-  "name": "@monei/mcp-server",
+  "name": "@mrmonei/mcp-server",
   "version": "1.0.0",
   "description": "MCP server for the Monei API — gives any AI agent access to wallets, transfers, crypto sends, swaps, offramp, and bill payments through natural language",
   "author": "Monei",
