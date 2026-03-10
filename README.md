@@ -17,7 +17,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "monei": {
       "command": "npx",
-      "args": ["-y", "@monei/mcp-server"],
+      "args": ["-y", "@mrmonei/mcp-server"],
       "env": {
         "MONEI_API_KEY": "your_api_key_here",
       }
@@ -37,7 +37,7 @@ Add to `.cursor/mcp.json` in your project:
   "mcpServers": {
     "monei": {
       "command": "npx",
-      "args": ["-y", "@monei/mcp-server"],
+      "args": ["-y", "@mrmonei/mcp-server"],
       "env": {
         "MONEI_API_KEY": "your_api_key_here"
       }
@@ -535,7 +535,7 @@ Agent flow: `get_wallet` → confirm balance → `send_naira_to_user`
 
 **`Session not found or expired` (SSE mode)**
 - The SSE session expired (1 hour TTL) or the server restarted
-- Re-open the `/sse` connection — your MCP client will reconnect automatically in most cases
+- Re-open the `/sse` connection your MCP client will reconnect automatically in most cases
 
 **Zod validation errors on tool inputs**
 - The agent passed a wrong type (e.g. `"100"` instead of `100` for an amount)
@@ -544,18 +544,11 @@ Agent flow: `get_wallet` → confirm balance → `send_naira_to_user`
 
 ---
 
-## Deployment
-
-See [DEPLOY_RAILWAY.md](./DEPLOY_RAILWAY.md) for a step-by-step Railway deployment guide.
-
----
-
 ## Security
 
 - API keys never appear in logs, error messages, or stack traces
-- Transaction PINs are request-scoped — never stored, cached, or logged
-- `MONEI_ENV=sandbox` is the default — production requires explicit opt-in
-- Zod validation runs before the SDK is touched — invalid input is rejected immediately
+- Transaction PINs are request-scoped. never stored, cached, or logged
+- Zod validation runs before the SDK is touched. invalid input is rejected immediately
 
 ---
 
