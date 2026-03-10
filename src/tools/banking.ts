@@ -42,7 +42,7 @@ Examples:
         const sdk = createClient(apiKey);
         const response = await sdk.walletUtility.getBanks();
         const output = {
-          banks: response.data.map((b) => ({ name: b.name, code: b.code })),
+          banks: response.data.map((b: { name: any; code: any; }) => ({ name: b.name, code: b.code })),
         };
         return {
           content: [{ type: "text", text: JSON.stringify(output, null, 2) }],
