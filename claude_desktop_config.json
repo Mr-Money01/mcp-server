@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "monei": {
+      "command": "node",
+      "args": ["/Users/admin/Documents/junior/goviral/mrmonei/mrmonei-nodejs-mcp-server"],
+      "env": {
+        "MONEI_API_KEY": "your_sandbox_api_key_here",
+        "MONEI_ENV": "sandbox"
+      }
+    }
+  }
+}

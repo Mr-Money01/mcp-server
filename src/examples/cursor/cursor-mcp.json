@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "monei": {
+      "url": "https://YOUR_RAILWAY_URL.up.railway.app/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_MONEI_API_KEY"
+      }
+    }
+  }
+}

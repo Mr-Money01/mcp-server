@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "monei": {
+      "command": "node",
+      "args": ["dist/main.js"],
+      "cwd": "/path/to/monei-mcp-server",
+      "env": {
+        "MONEI_API_KEY": "YOUR_MONEI_API_KEY",
+        "MONEI_TRANSPORT": "stdio",
+        "MONEI_ENV": "sandbox"
+      }
+    }
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "name": "@monei/mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for the Monei API — gives any AI agent access to wallets, transfers, crypto sends, swaps, offramp, and bill payments through natural language",
+  "author": "Monei",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "monei-mcp": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "start:http": "MONEI_TRANSPORT=http node dist/index.js",
+    "start:sse": "MONEI_TRANSPORT=sse node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:http": "npx tsx src/scripts/test-http.ts",
+    "test:sse": "npx tsx src/scripts/test-sse.ts",
+    "prepublishOnly": "npm run build && npm run typecheck"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "monei",
+    "ai",
+    "agent",
+    "fintech",
+    "crypto",
+    "payments",
+    "nigeria",
+    "naira",
+    "offramp"
+  ],
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "hono": "^4.7.5",
+    "monei-sdk": "*",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.10",
+    "eslint": "^9.22.0",
+    "jest": "^29.7.0",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/monei/mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/monei/mcp-server/issues"
+  },
+  "homepage": "https://github.com/monei/mcp-server#readme"
+}
