@@ -1,10 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { createServer as createMcpServer } from "../server.js";
+import { getApiKeyFromToken } from "./oauth.js";
 
 interface Session {
   transport: SSEServerTransport;
-  apiKey: string;
   createdAt: number;
 }
 
@@ -13,9 +13,8 @@ const sessions = new Map<string, Session>();
 // Evict sessions older than 1 hour
 setInterval(() => {
   const now = Date.now();
-  const TTL = 60 * 60 * 1000;
   for (const [id, session] of sessions) {
-    if (now - session.createdAt > TTL) {
+    if (now - session.createdAt > 60 * 60 * 1000) {
       sessions.delete(id);
       console.error(`[monei-mcp:sse] Evicted expired session ${id}`);
     }
@@ -30,9 +29,8 @@ export function createSseListener(): (
     const url = new URL(req.url ?? "/", "http://localhost");
 
     if (req.method === "GET" && url.pathname === "/sse") {
-      // Must handle errors here since we can't await in a sync function
       handleSseOpen(req, res).catch((err) => {
-        console.error("[monei-mcp:sse] Error opening SSE stream:", err);
+        console.error("[monei-mcp:sse] Error:", err);
         if (!res.headersSent) {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "Failed to open SSE stream" }));
@@ -43,7 +41,7 @@ export function createSseListener(): (
 
     if (req.method === "POST" && url.pathname === "/message") {
       handleMessage(req, res).catch((err) => {
-        console.error("[monei-mcp:sse] Error handling message:", err);
+        console.error("[monei-mcp:sse] Error:", err);
         if (!res.headersSent) {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: "Failed to process message" }));
@@ -60,35 +58,41 @@ async function handleSseOpen(
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<void> {
-  // 1. Auth
+  // Extract API key — supports both:
+  // 1. OAuth access token (Claude.ai web) → look up real API key
+  // 2. Raw Monei API key (Claude Desktop, Cursor, direct use)
   const authHeader = req.headers["authorization"];
   const raw = Array.isArray(authHeader) ? authHeader[0] : authHeader;
-  const apiKey = extractBearerToken(raw);
+  const bearerToken = raw?.replace(/^Bearer\s+/i, "").trim();
 
-  if (!apiKey) {
-    res.writeHead(401, { "Content-Type": "application/json" });
+  if (!bearerToken) {
+    // Return 401 with WWW-Authenticate so Claude.ai triggers OAuth flow
+    const baseUrl = process.env.MCP_BASE_URL ?? "https://mcp.monei.cc";
+    res.writeHead(401, {
+      "Content-Type": "application/json",
+      "WWW-Authenticate": `Bearer realm="${baseUrl}", resource_metadata_url="${baseUrl}/.well-known/oauth-authorization-server"`,
+    });
     res.end(JSON.stringify({
-      error: "Missing or invalid Authorization header. Use: Authorization: Bearer <your-monei-api-key>",
+      error: "unauthorized",
+      error_description: "Authorization required. Connect via OAuth or pass your Monei API key as a Bearer token.",
     }));
     return;
   }
 
-  // 2. Create transport with the raw ServerResponse
-  //    SSEServerTransport immediately writes SSE headers to res on construction
+  // Try OAuth token lookup first, fall back to treating as raw API key
+  const apiKey = getApiKeyFromToken(bearerToken) ?? bearerToken;
+
   const transport = new SSEServerTransport("/message", res);
   const sessionId = transport.sessionId;
 
-  sessions.set(sessionId, { transport, apiKey, createdAt: Date.now() });
+  sessions.set(sessionId, { transport, createdAt: Date.now() });
   console.error(`[monei-mcp:sse] New session ${sessionId}`);
 
-  // 3. Connect MCP server — this triggers the transport to send the
-  //    "endpoint" event with the sessionId to the client
   const server = createMcpServer(apiKey);
   await server.connect(transport);
 
   console.error(`[monei-mcp:sse] Session ${sessionId} connected`);
 
-  // 4. Clean up on disconnect
   res.on("close", () => {
     sessions.delete(sessionId);
     console.error(`[monei-mcp:sse] Session ${sessionId} closed`);
@@ -104,24 +108,16 @@ async function handleMessage(
 
   if (!sessionId) {
     res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Missing sessionId query parameter" }));
+    res.end(JSON.stringify({ error: "Missing sessionId" }));
     return;
   }
 
   const session = sessions.get(sessionId);
   if (!session) {
     res.writeHead(404, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({
-      error: `Session '${sessionId}' not found or expired. Re-open /sse to start a new session.`,
-    }));
+    res.end(JSON.stringify({ error: `Session '${sessionId}' not found or expired` }));
     return;
   }
 
   await session.transport.handlePostMessage(req, res);
-}
-
-function extractBearerToken(header?: string): string | null {
-  if (!header) return null;
-  const match = header.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() ?? null;
 }
