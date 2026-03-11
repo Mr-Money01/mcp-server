@@ -141,14 +141,23 @@ async function handleDiscovery(
     token_endpoint: `${BASE_URL}/oauth/token`,
     userinfo_endpoint: `${BASE_URL}/oauth/userinfo`,
     registration_endpoint: `${BASE_URL}/oauth/register`,
+    // Tell Claude.ai where the MCP SSE endpoint lives
+    mcp_endpoint: `${BASE_URL}/sse`,
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
-    token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic", "none"],
+    token_endpoint_auth_methods_supported: [
+      "client_secret_post",
+      "client_secret_basic",
+      "none",
+    ],
     scopes_supported: ["openid", "profile"],
   };
 
-  res.writeHead(200, { "Content-Type": "application/json" });
+  res.writeHead(200, {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+  });
   res.end(JSON.stringify(metadata));
 }
 

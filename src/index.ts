@@ -59,9 +59,7 @@ async function main(): Promise<void> {
 
       http
         .createServer((req, res) => {
-          // OAuth endpoints first
           if (oauthListener(req, res)) return;
-          // MCP endpoint
           if (req.url?.startsWith("/mcp")) {
             mcpListener(req, res).catch((err) => {
               console.error("[monei-mcp] Error:", err);
@@ -69,7 +67,6 @@ async function main(): Promise<void> {
             });
             return;
           }
-          // Everything else (health)
           honoFetch(app, req, res).catch((err) => {
             console.error("[monei-mcp] Error:", err);
             if (!res.headersSent) { res.writeHead(500); res.end(); }
@@ -77,14 +74,13 @@ async function main(): Promise<void> {
         })
         .listen(port, () => {
           console.error(`[monei-mcp] HTTP transport on port ${port}`);
-          console.error(`[monei-mcp] POST  http://localhost:${port}/mcp`);
-          console.error(`[monei-mcp] GET   http://localhost:${port}/health`);
         });
       break;
     }
 
     case "sse": {
       const honoApp = new Hono();
+
       honoApp.get("/health", (c) =>
         c.json({
           status: "ok",
@@ -94,16 +90,19 @@ async function main(): Promise<void> {
         })
       );
 
+      // Root redirect → /sse (Claude.ai hits the base URL after OAuth)
+      honoApp.get("/", (c) => c.redirect("/sse", 302));
+
       const oauthListener = createOAuthListener();
       const sseListener = createSseListener();
 
       http
         .createServer((req, res) => {
-          // OAuth endpoints (/.well-known, /oauth/*)
+          // OAuth endpoints first
           if (oauthListener(req, res)) return;
-          // SSE endpoints (/sse, /message)
+          // SSE endpoints
           if (sseListener(req, res)) return;
-          // Health + fallback
+          // Health, root redirect, fallback
           honoFetch(honoApp, req, res).catch((err) => {
             console.error("[monei-mcp] Error:", err);
             if (!res.headersSent) { res.writeHead(500); res.end(); }
@@ -115,9 +114,6 @@ async function main(): Promise<void> {
           console.error(`[monei-mcp] POST  http://localhost:${port}/message`);
           console.error(`[monei-mcp] GET   http://localhost:${port}/health`);
           console.error(`[monei-mcp] GET   http://localhost:${port}/.well-known/oauth-authorization-server`);
-          console.error(`[monei-mcp] POST  http://localhost:${port}/oauth/register`);
-          console.error(`[monei-mcp] GET   http://localhost:${port}/oauth/authorize`);
-          console.error(`[monei-mcp] POST  http://localhost:${port}/oauth/token`);
         });
       break;
     }
