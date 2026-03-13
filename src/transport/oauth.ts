@@ -35,6 +35,30 @@ const refreshTokens = new Map<string, string>(); // refreshToken → accessToken
 const TOKEN_TTL = 60 * 60 * 1000; // 1 hour
 const CODE_TTL = 10 * 60 * 1000;  // 10 minutes
 const BASE_URL = process.env.MCP_BASE_URL ?? "https://mcp.monei.cc";
+const MONEI_ENV = process.env.MONEI_ENV ?? "sandbox";
+const BACKEND_BASE = MONEI_ENV === "live" ? "https://api.monei.cc" : "https://api.dev.monei.cc";
+
+// ─── Validate API key against Monei backend ───────────────────────────────────
+
+async function validateApiKey(apiKey: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const res = await fetch(`${BACKEND_BASE}/api/v1/user/me`, {
+      method: "GET",
+      headers: { "X-API-KEY": apiKey },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (res.ok) return { valid: true };
+    if (res.status === 401 || res.status === 403) {
+      return { valid: false, error: "Invalid API key. Please check and try again." };
+    }
+    return { valid: false, error: `Monei returned an unexpected error (${res.status}). Try again.` };
+  } catch (err: any) {
+    if (err?.name === "TimeoutError") {
+      return { valid: false, error: "Connection to Monei timed out. Please try again." };
+    }
+    return { valid: false, error: "Could not reach Monei servers. Check your connection and try again." };
+  }
+}
 
 // ─── Cleanup expired tokens every 10 minutes ─────────────────────────────────
 setInterval(() => {
@@ -202,18 +226,20 @@ async function handleRegister(
 
 // ─── 3. Authorization page ────────────────────────────────────────────────────
 
-async function handleAuthorizeGet(
-  req: http.IncomingMessage,
-  res: http.ServerResponse
-): Promise<void> {
-  const url = new URL(req.url ?? "/", "http://localhost");
-  const clientId = url.searchParams.get("client_id") ?? "";
-  const redirectUri = url.searchParams.get("redirect_uri") ?? "";
-  const state = url.searchParams.get("state") ?? "";
-  const codeChallenge = url.searchParams.get("code_challenge") ?? "";
-  const codeChallengeMethod = url.searchParams.get("code_challenge_method") ?? "";
+function renderAuthPage(params: {
+  clientId: string;
+  redirectUri: string;
+  state: string;
+  codeChallenge: string;
+  codeChallengeMethod: string;
+  error?: string;
+}): string {
+  const { clientId, redirectUri, state, codeChallenge, codeChallengeMethod, error } = params;
+  const errorHtml = error
+    ? `<div class="error">${escHtml(error)}</div>`
+    : "";
 
-  const html = `<!DOCTYPE html>
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -296,6 +322,17 @@ async function handleAuthorizeGet(
       transition: opacity 0.15s;
     }
     button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .error {
+      background: #1f0a0a;
+      border: 1px solid #5c1a1a;
+      color: #f87171;
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
     .footer {
       margin-top: 24px;
       text-align: center;
@@ -311,7 +348,8 @@ async function handleAuthorizeGet(
     <div class="tagline">Financial AI for the autonomous economy</div>
     <h1>Connect your Monei account</h1>
     <p>Enter your Monei API key to give access to Mr. Monei</p>
-    <form method="POST" action="/oauth/authorize">
+    ${errorHtml}
+    <form method="POST" action="/oauth/authorize" onsubmit="handleSubmit(event)">
       <input type="hidden" name="client_id" value="${escHtml(clientId)}">
       <input type="hidden" name="redirect_uri" value="${escHtml(redirectUri)}">
       <input type="hidden" name="state" value="${escHtml(state)}">
@@ -326,15 +364,37 @@ async function handleAuthorizeGet(
         autocomplete="off"
         required
       >
-      <button type="submit">Authorize</button>
+      <button type="submit" id="submit-btn">Authorize</button>
     </form>
     <div class="footer">
       <a href="https://monei.cc" target="_blank">monei.cc</a> · 
       <a href="https://docs.monei.cc" target="_blank">Docs</a>
     </div>
   </div>
+  <script>
+    function handleSubmit(e) {
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.textContent = 'Verifying...';
+    }
+  </script>
 </body>
 </html>`;
+}
+
+async function handleAuthorizeGet(
+  req: http.IncomingMessage,
+  res: http.ServerResponse
+): Promise<void> {
+  const url = new URL(req.url ?? "/", "http://localhost");
+  const clientId = url.searchParams.get("client_id") ?? "";
+  const redirectUri = url.searchParams.get("redirect_uri") ?? "";
+  const state = url.searchParams.get("state") ?? "";
+  const codeChallenge = url.searchParams.get("code_challenge") ?? "";
+  const codeChallengeMethod = url.searchParams.get("code_challenge_method") ?? "";
+  const errorMsg = url.searchParams.get("error_msg") ?? undefined;
+
+  const html = renderAuthPage({ clientId, redirectUri, state, codeChallenge, codeChallengeMethod, error: errorMsg });
 
   res.writeHead(200, { "Content-Type": "text/html" });
   res.end(html);
@@ -347,15 +407,35 @@ async function handleAuthorizePost(
   const raw = await readBody(req);
   const body = parseBody(raw, "application/x-www-form-urlencoded");
 
-  const { client_id, redirect_uri, state, api_key } = body;
+  const { client_id, redirect_uri, state, api_key, code_challenge, code_challenge_method } = body;
+
+  const renderError = (error: string) => {
+    const html = renderAuthPage({
+      clientId: client_id ?? "",
+      redirectUri: redirect_uri ?? "",
+      state: state ?? "",
+      codeChallenge: code_challenge ?? "",
+      codeChallengeMethod: code_challenge_method ?? "",
+      error,
+    });
+    res.writeHead(400, { "Content-Type": "text/html" });
+    res.end(html);
+  };
 
   if (!api_key?.trim()) {
-    res.writeHead(400, { "Content-Type": "text/html" });
-    res.end("<p>API key is required. Please go back and try again.</p>");
-    return;
+    return renderError("API key is required.");
   }
 
-  // Generate auth code
+  // ── Validate the API key against Monei backend before issuing auth code ──
+  console.error(`[monei-mcp:oauth] Validating API key for client ${client_id}`);
+  const validation = await validateApiKey(api_key.trim());
+
+  if (!validation.valid) {
+    console.error(`[monei-mcp:oauth] API key validation failed: ${validation.error}`);
+    return renderError(validation.error ?? "Invalid API key.");
+  }
+
+  // Key is valid — generate auth code
   const code = crypto.randomBytes(32).toString("hex");
   authCodes.set(code, {
     code,
@@ -365,7 +445,7 @@ async function handleAuthorizePost(
     expiresAt: Date.now() + CODE_TTL,
   });
 
-  console.error(`[monei-mcp:oauth] Auth code issued for client ${client_id}`);
+  console.error(`[monei-mcp:oauth] API key valid — auth code issued for client ${client_id}`);
 
   // Redirect back to Claude
   const redirectUrl = new URL(redirect_uri);
