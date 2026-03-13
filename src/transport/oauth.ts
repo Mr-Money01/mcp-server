@@ -35,8 +35,7 @@ const refreshTokens = new Map<string, string>(); // refreshToken → accessToken
 const TOKEN_TTL = 60 * 60 * 1000; // 1 hour
 const CODE_TTL = 10 * 60 * 1000;  // 10 minutes
 const BASE_URL = process.env.MCP_BASE_URL ?? "https://mcp.monei.cc";
-const MONEI_ENV = process.env.MONEI_ENV ?? "sandbox";
-const BACKEND_BASE = MONEI_ENV === "live" ? "https://api.monei.cc" : "https://api.dev.monei.cc";
+const BACKEND_BASE = "https://api.monei.cc";
 
 // ─── Validate API key against Monei backend ───────────────────────────────────
 
